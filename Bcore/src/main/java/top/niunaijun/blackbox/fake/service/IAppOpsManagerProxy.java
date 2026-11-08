@@ -101,9 +101,8 @@ public class IAppOpsManagerProxy extends BinderInvocationStub {
         try {
             if (result instanceof SyncNotedAppOp) {
                 SyncNotedAppOp noted = (SyncNotedAppOp) result;
-                if (noted.getOpMode() != AppOpsManager.MODE_ALLOWED) {
-                    return new SyncNotedAppOp(AppOpsManager.MODE_ALLOWED,
-                            noted.getOp(), noted.getOpPackageName(), noted.getAttributionTag());
+                if (notedOpMode(noted) != AppOpsManager.MODE_ALLOWED) {
+                    return buildAllowed(noted, noted.getOp(), noted.getAttributionTag());
                 }
                 return noted;
             }
@@ -117,9 +116,46 @@ public class IAppOpsManagerProxy extends BinderInvocationStub {
                         : AppOpsManager.MODE_ALLOWED;
             }
         } catch (Throwable t) {
-            Slog.w(TAG, "AppOps coerceAllowed: failed to coerce, using legacy allow " + t);
+            Slog.w(TAG, "AppOps coerceAllowed: failed to coerce, returning original result " + t);
         }
         return result;
+    }
+
+    /**
+     * SyncNotedAppOp.getOpMode() is @SystemApi (not in the compile SDK); use reflection.
+     */
+    private static int notedOpMode(SyncNotedAppOp noted) {
+        try {
+            java.lang.reflect.Method m = SyncNotedAppOp.class.getMethod("getOpMode");
+            Object mode = m.invoke(noted);
+            return mode instanceof Integer ? (Integer) mode : AppOpsManager.MODE_ALLOWED;
+        } catch (Throwable t) {
+            return AppOpsManager.MODE_ALLOWED;
+        }
+    }
+
+    /**
+     * Build an "allowed" SyncNotedAppOp. The 4-arg constructor
+     * {@code SyncNotedAppOp(int opMode, String op, String packageName, String attributionTag)}
+     * is @SystemApi and may be blocked from reflection on some Android versions, so fall back
+     * to the public 2-arg constructor {@code SyncNotedAppOp(int opMode, String op)}.
+     */
+    private static SyncNotedAppOp buildAllowed(SyncNotedAppOp template, String op, String attributionTag) {
+        String packageName = null;
+        try {
+            java.lang.reflect.Method m = SyncNotedAppOp.class.getMethod("getOpPackageName");
+            Object pkg = m.invoke(template);
+            packageName = pkg instanceof String ? (String) pkg : null;
+        } catch (Throwable ignored) {
+        }
+        try {
+            java.lang.reflect.Constructor<SyncNotedAppOp> c4 = SyncNotedAppOp.class
+                    .getConstructor(int.class, String.class, String.class, String.class);
+            return c4.newInstance(AppOpsManager.MODE_ALLOWED, op, packageName, attributionTag);
+        } catch (Throwable ignored) {
+            // fall back to the public 2-arg constructor
+        }
+        return new SyncNotedAppOp(AppOpsManager.MODE_ALLOWED, op);
     }
 
     /**
@@ -142,7 +178,7 @@ public class IAppOpsManagerProxy extends BinderInvocationStub {
                     attributionTag = (String) args[2];
                 }
                 String op = code != null ? getOpPublicName(code) : null;
-                return new SyncNotedAppOp(AppOpsManager.MODE_ALLOWED, op, packageName, attributionTag);
+                return buildAllowed(null, op, attributionTag);
             }
         } catch (Throwable ignored) {
         }
