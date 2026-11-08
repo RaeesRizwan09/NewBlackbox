@@ -19,11 +19,10 @@ jobs:
           java-version: '21'
           cache: 'gradle'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
+      # GitHub ubuntu runners already have the Android SDK preinstalled;
+      # the old setup-android action fails on the removed legacy 'tools' package.
       - name: Accept Android SDK licenses
-        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || yes | $ANDROID_HOME/tools/bin/sdkmanager --licenses || true
+        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null 2>&1 || true
 
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
