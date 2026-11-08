@@ -53,11 +53,8 @@ public class AppJobServiceDispatcher {
                 try {
                     // Plain services have no job contract: hand them a standard
                     // onStartCommand with an explicit (empty) work intent.
-                    Intent work = new Intent(record.mServiceInfo.packageName,
+                    Intent work = new Intent().setClassName(record.mServiceInfo.packageName,
                             record.mServiceInfo.name);
-                    if (params.getExtras() != null) {
-                        work.putExtras(params.getExtras().toIntent());
-                    }
                     plainService.onStartCommand(work, 0, params.getJobId());
                     Slog.d(TAG, "Started plain service for jobId " + params.getJobId()
                             + ": " + record.mServiceInfo.name);
