@@ -7,7 +7,7 @@ import java.util.Set;
 
 import top.niunaijun.blackbox.BlackBoxCore;
 import top.niunaijun.blackbox.entity.pm.InstallResult;
-
+import top.niunaijun.blackbox.utils.Slog;
 
 public class GmsCore {
     private static final String TAG = "GmsCore";
@@ -106,6 +106,45 @@ public class GmsCore {
         } catch (PackageManager.NameNotFoundException ignored) {
         }
         return false;
+    }
+
+    /**
+     * Asset-relative path of the bundled microG GmsCore APK. It uses the same
+     * package name as real Google Play Services (com.google.android.gms), so
+     * sandboxed apps resolve their GMS bindings transparently without any
+     * extra patching. FOSS (microG Project), redistributed unmodified.
+     */
+    public static final String MICROG_APK_ASSET = "microg/gmscore.apk";
+
+    /**
+     * Installs the bundled microG GmsCore into the sandbox. Used when the
+     * host device has no real Google Play Services to mirror (or the host
+     * package lookup fails). Writes the asset to a cache file first because
+     * the package manager needs a real file path.
+     */
+    public static InstallResult installMicroG(int userId) {
+        try {
+            android.content.Context ctx = BlackBoxCore.getContext();
+            java.io.File out = new java.io.File(ctx.getCacheDir(), "microg_gmscore.apk");
+            try (java.io.InputStream in = ctx.getAssets().open(MICROG_APK_ASSET);
+                 java.io.OutputStream os = new java.io.FileOutputStream(out)) {
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) > 0) {
+                    os.write(buf, 0, n);
+                }
+            }
+            Slog.i(TAG, "installMicroG: staging microG asset (" + out.length() + " bytes)");
+            InstallResult result = BlackBoxCore.get().installPackageAsUser(out, userId);
+            if (!result.success) {
+                Slog.e(TAG, "installMicroG failed: " + result.msg);
+            }
+            return result;
+        } catch (Throwable t) {
+            Slog.e(TAG, "installMicroG error", t);
+            InstallResult error = new InstallResult();
+            return error.installError(t.getMessage());
+        }
     }
 
     public static boolean isInstalledGoogleService(int userId) {

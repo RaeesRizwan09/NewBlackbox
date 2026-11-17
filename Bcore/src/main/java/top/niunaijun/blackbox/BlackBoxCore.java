@@ -1225,7 +1225,15 @@ public class BlackBoxCore extends ClientConfiguration {
     }
 
     public InstallResult installGms(int userId) {
-        return GmsCore.installGApps(userId);
+        // Preferred: mirror the host's real Google Play Services. On hosts
+        // without GMS (or where the lookup fails), fall back to the bundled
+        // microG GmsCore so sandboxed apps still get GMS bindings (notably
+        // FCM push) without any device-side Google dependency.
+        if (GmsCore.isSupportGms()) {
+            return GmsCore.installGApps(userId);
+        }
+        Slog.i(TAG, "installGms: host has no real GMS, falling back to microG");
+        return GmsCore.installMicroG(userId);
     }
 
     public boolean uninstallGms(int userId) {
