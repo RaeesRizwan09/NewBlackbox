@@ -162,7 +162,7 @@ public class GmsCore {
         try {
             android.content.Intent checkin = new android.content.Intent()
                     .setClassName(GMS_PKG, "org.microg.gms.checkin.CheckinService");
-            BlackBoxCore.get().startService(checkin, null, false, userId);
+            BlackBoxCore.getBActivityManager().startService(checkin, null, false, userId);
             Slog.i(TAG, "installMicroG: CheckinService started for user " + userId);
         } catch (Throwable t) {
             Slog.w(TAG, "installMicroG: check-in kick failed", t);
@@ -170,7 +170,7 @@ public class GmsCore {
         try {
             android.content.Intent mcs = new android.content.Intent()
                     .setClassName(GMS_PKG, "org.microg.gms.gcm.McsService");
-            BlackBoxCore.get().startService(mcs, null, false, userId);
+            BlackBoxCore.getBActivityManager().startService(mcs, null, false, userId);
             Slog.i(TAG, "installMicroG: McsService (FCM) started for user " + userId);
         } catch (Throwable t) {
             Slog.w(TAG, "installMicroG: MCS kick failed", t);
