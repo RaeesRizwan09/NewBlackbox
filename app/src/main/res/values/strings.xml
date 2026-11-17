@@ -62,6 +62,9 @@
     <string name="disable_flag_secure_summary">Allow screenshots and screen recording in apps</string>
     <string name="gms_manager">GMS Manager</string>
     <string name="jump_gms">Go to Gms Manager</string>
+    <string name="prefer_microg">Use microG (FOSS Push)</string>
+    <string name="prefer_microg_summary">Install the bundled microG GmsCore instead of mirroring the device\'s Google Play Services. Uninstall GMS in the GMS Manager, then reinstall, for this to take effect.</string>
+    <string name="prefer_microg_applied">microG preference saved. If GMS was already installed in a user, uninstall it in GMS Manager and reinstall to apply.</string>
     <string name="enable_gms">Enable Service</string>
     <string name="enable_gms_hint">Opening Google services can make youtube and other software that strongly rely on Google play services run normally.</string>
     <string name="disable_gms">Disable Service</string>

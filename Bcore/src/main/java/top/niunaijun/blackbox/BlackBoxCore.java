@@ -81,6 +81,14 @@ public class BlackBoxCore extends ClientConfiguration {
 
     private static final BlackBoxCore sBlackBoxCore = new BlackBoxCore();
     private static Context sContext;
+
+    /**
+     * When true, installGms() always installs the bundled microG GmsCore
+     * instead of mirroring the host's real Google Play Services. Lets users
+     * on GMS-equipped hosts opt into the FOSS push path (no real Google
+     * dependency inside the sandbox). Set by the app UI; process-local.
+     */
+    private static volatile boolean sPreferMicroG = false;
     
     
     static {
@@ -1225,7 +1233,13 @@ public class BlackBoxCore extends ClientConfiguration {
     }
 
     public InstallResult installGms(int userId) {
-        // Preferred: mirror the host's real Google Play Services. On hosts
+        // Prefer-microG switch: force the bundled microG GmsCore regardless
+        // of whether the host has real Google Play Services.
+        if (sPreferMicroG) {
+            Slog.i(TAG, "installGms: prefer-microG enabled, installing bundled microG");
+            return GmsCore.installMicroG(userId);
+        }
+        // Default: mirror the host's real Google Play Services. On hosts
         // without GMS (or where the lookup fails), fall back to the bundled
         // microG GmsCore so sandboxed apps still get GMS bindings (notably
         // FCM push) without any device-side Google dependency.
@@ -1239,6 +1253,19 @@ public class BlackBoxCore extends ClientConfiguration {
     public boolean uninstallGms(int userId) {
         GmsCore.uninstallGApps(userId);
         return !GmsCore.isInstalledGoogleService(userId);
+    }
+
+    /**
+     * Forces installGms() to use the bundled microG GmsCore instead of
+     * mirroring the host's real Google Play Services.
+     */
+    public static void setPreferMicroG(boolean preferMicroG) {
+        sPreferMicroG = preferMicroG;
+        Slog.i(TAG, "setPreferMicroG: " + preferMicroG);
+    }
+
+    public static boolean isPreferMicroG() {
+        return sPreferMicroG;
     }
 
     

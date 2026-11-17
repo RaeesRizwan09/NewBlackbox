@@ -11,6 +11,11 @@
                 android:title="@string/gms_manager"
                 android:summary="@string/jump_gms"/>
 
+        <SwitchPreferenceCompat
+                app:key="prefer_microg"
+                app:title="@string/prefer_microg"
+                app:summary="@string/prefer_microg_summary" />
+
 
 
         <SwitchPreferenceCompat

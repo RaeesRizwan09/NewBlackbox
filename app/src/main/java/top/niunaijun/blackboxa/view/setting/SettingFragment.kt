@@ -50,15 +50,25 @@ class SettingFragment : PreferenceFragmentCompat() {
     private fun initGms() {
         val gmsManagerPreference: Preference = (findPreference("gms_manager")!!)
 
-        if (BlackBoxCore.get().isSupportGms) {
+        // The bundled microG fallback makes GMS install available on every
+        // host, so the manager is always reachable.
+        gmsManagerPreference.setOnPreferenceClickListener {
+            GmsManagerActivity.start(requireContext())
+            true
+        }
 
-            gmsManagerPreference.setOnPreferenceClickListener {
-                GmsManagerActivity.start(requireContext())
-                true
-            }
-        } else {
-            gmsManagerPreference.summary = getString(R.string.no_gms)
-            gmsManagerPreference.isEnabled = false
+        val preferMicrogPreference: Preference = (findPreference("prefer_microg")!!)
+        val saved = AppManager.mGmsSettingsSharedPreferences.getBoolean("prefer_microg", false)
+        preferMicrogPreference.setDefaultValue(saved)
+        BlackBoxCore.setPreferMicroG(saved)
+        preferMicrogPreference.setOnPreferenceChangeListener { _, newValue ->
+            val prefer = (newValue == true)
+            AppManager.mGmsSettingsSharedPreferences.edit()
+                .putBoolean("prefer_microg", prefer)
+                .apply()
+            BlackBoxCore.setPreferMicroG(prefer)
+            toast(R.string.prefer_microg_applied)
+            true
         }
     }
 
