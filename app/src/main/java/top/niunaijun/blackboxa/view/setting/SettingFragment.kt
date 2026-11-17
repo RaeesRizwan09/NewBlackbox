@@ -3,6 +3,7 @@ package top.niunaijun.blackboxa.view.setting
 import android.os.Bundle
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
+import androidx.preference.SwitchPreferenceCompat
 import top.niunaijun.blackbox.BlackBoxCore
 import top.niunaijun.blackboxa.R
 import top.niunaijun.blackboxa.app.AppManager
@@ -57,9 +58,10 @@ class SettingFragment : PreferenceFragmentCompat() {
             true
         }
 
-        val preferMicrogPreference: Preference = (findPreference("prefer_microg")!!)
+        val preferMicrogPreference: SwitchPreferenceCompat =
+                (findPreference("prefer_microg")!!)
         val saved = AppManager.mGmsSettingsSharedPreferences.getBoolean("prefer_microg", false)
-        preferMicrogPreference.setDefaultValue(saved)
+        preferMicrogPreference.isChecked = saved
         BlackBoxCore.setPreferMicroG(saved)
         preferMicrogPreference.setOnPreferenceChangeListener { _, newValue ->
             val prefer = (newValue == true)

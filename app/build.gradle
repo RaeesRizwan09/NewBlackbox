@@ -3,6 +3,41 @@ plugins {
     alias(libs.plugins.jetbrains.kotlin.android)
 }
 
+// The bundled microG GmsCore APK (~108 MB) is too large to commit to GitHub
+// (100 MB file limit) and would bloat clones. Instead it is fetched once,
+// on demand, from the official microG release. CI runners have fast GitHub
+// access, so the artifact never needs to transit cellular data.
+def microGAsset = file('src/main/assets/microg/gmscore.apk')
+def microGUrl = 'https://github.com/microg/GmsCore/releases/download/v0.3.18.252432/com.google.android.gms-252432036.apk'
+def microGSha256 = '1094fa60ace2367ac52bd08d1bd4f33fa8144ba930e355121b28234b8ebbf382'
+
+tasks.register('ensureMicroGAsset') {
+    outputs.file(microGAsset)
+    onlyIf { !microGAsset.exists() || microGAsset.length() < 50 * 1024 * 1024L }
+    doLast {
+        def dest = microGAsset
+        def parent = dest.parentFile
+        if (!parent.isDirectory()) parent.mkdirs()
+        if (dest.exists()) dest.delete()
+        logger.lifecycle("Downloading microG GmsCore (${microGUrl})...")
+        ant.get(src: microGUrl, dest: dest, skipexisting: false)
+        def digest = java.security.MessageDigest.getInstance('SHA-256').digest(dest.bytes)
+                .collect { String.format('%02x', it) }.join()
+        if (digest != microGSha256) {
+            dest.delete()
+            throw new GradleException("microG APK checksum mismatch: ${digest}")
+        }
+        logger.lifecycle("microG GmsCore OK (${dest.length()} bytes, sha256 verified).")
+    }
+}
+
+// The asset must be in place before any asset-merge task runs.
+tasks.configureEach { t ->
+    if (t.name.startsWith('merge') && t.name.endsWith('Assets')) {
+        t.dependsOn 'ensureMicroGAsset'
+    }
+}
+
 android {
 
     namespace 'top.niunaijun.blackboxa'
