@@ -138,12 +138,42 @@ public class GmsCore {
             InstallResult result = BlackBoxCore.get().installPackageAsUser(out, userId);
             if (!result.success) {
                 Slog.e(TAG, "installMicroG failed: " + result.msg);
+                return result;
             }
+            // In a sandbox the normal microG triggers (BOOT_COMPLETED,
+            // AIRPLANE_MODE broadcasts, periodic alarms) never arrive, so its
+            // device check-in never runs and GCM registration answers
+            // SERVICE_NOT_AVAILABLE. Kick the check-in and the FCM connection
+            // explicitly right after install.
+            kickMicroGBackgroundServices(userId);
             return result;
         } catch (Throwable t) {
             Slog.e(TAG, "installMicroG error", t);
             InstallResult error = new InstallResult();
             return error.installError(t.getMessage());
+        }
+    }
+
+    /**
+     * Starts microG's check-in and FCM connection services inside the
+     * sandbox user so registration can complete without system broadcasts.
+     */
+    private static void kickMicroGBackgroundServices(int userId) {
+        try {
+            android.content.Intent checkin = new android.content.Intent()
+                    .setClassName(GMS_PKG, "org.microg.gms.checkin.CheckinService");
+            BlackBoxCore.get().startService(checkin, null, false, userId);
+            Slog.i(TAG, "installMicroG: CheckinService started for user " + userId);
+        } catch (Throwable t) {
+            Slog.w(TAG, "installMicroG: check-in kick failed", t);
+        }
+        try {
+            android.content.Intent mcs = new android.content.Intent()
+                    .setClassName(GMS_PKG, "org.microg.gms.gcm.McsService");
+            BlackBoxCore.get().startService(mcs, null, false, userId);
+            Slog.i(TAG, "installMicroG: McsService (FCM) started for user " + userId);
+        } catch (Throwable t) {
+            Slog.w(TAG, "installMicroG: MCS kick failed", t);
         }
     }
 
