@@ -1269,7 +1269,7 @@ public class BlackBoxCore extends ClientConfiguration {
      * implementation than the one about to be installed.
      */
     private static void replaceGmsIfNeeded(int userId, boolean wantMicroG) {
-        if (!isInstallGms(userId)) {
+        if (!GmsCore.isInstalledGoogleService(userId)) {
             return;
         }
         boolean installedMicroG = GmsCore.isInstalledMicroG(userId);
