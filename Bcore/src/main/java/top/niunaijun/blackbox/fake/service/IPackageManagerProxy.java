@@ -136,6 +136,15 @@ public class IPackageManagerProxy extends BinderInvocationStub {
             
             
             if ("com.android.vending".equals(packageName)) {
+                // When the real Play Store was installed into the sandbox
+                // (the host-GMS path) report it as is; only fabricate a
+                // record when the sandbox has none.
+                PackageInfo installed = BlackBoxCore.getBPackageManager()
+                        .getPackageInfo(packageName, flags, BlackBoxCore.getUserId());
+                if (installed != null) {
+                    GoogleSignatures.apply(installed, GoogleSignatures.hostPackageInfo(method, who, args));
+                    return installed;
+                }
                 PackageInfo fake = createFakeGooglePlayServicesPackageInfo();
                 // A Play Store record without Google's certificate is worse
                 // than no record: apps report "signature is invalid" and
