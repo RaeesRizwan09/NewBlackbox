@@ -211,6 +211,21 @@ ContentResolver.setSyncAutomatically(account, "com.google", true);
 
 ### Google Play Services
 
+### microG as Play services (spoofed Google sign-in)
+
+BlackBox can install the bundled microG GmsCore as `com.google.android.gms`
+inside the sandbox: enable **Settings → Others → Use microG (FOSS Push)**, then
+open **GMS Manager** and enable the user. Inside the sandbox microG reports
+Google's public signing certificate, so `GoogleApiAvailability`-style checks
+pass, the account picker and auth services resolve, and the engine answers
+account queries with `mock.user@gmail.com` / `virtual.user@gmail.com` plus a
+syntactically valid OAuth token.
+
+Limits: the account and token are local only. Google servers reject them, so
+online sign-in (Drive, Play purchases) and attestation-based flows (Play
+Integrity, hardware key attestation, WhatsApp registration) do not work in a
+virtualized uid.
+
 #### GMS Compatibility
 ```java
 // Google Play Services automatically:
