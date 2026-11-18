@@ -64,8 +64,13 @@ public class ContentProviderStub extends ClassInvocationStub implements BContent
      */
     private void rewriteAttribution(Object[] args) {
         if (args == null) return;
-        int uid = mKeepVirtualUid ? BActivityThread.getUid() : BlackBoxCore.getHostUid();
-        if (uid <= 0) {
+        int uid;
+        if (mKeepVirtualUid) {
+            // AppConfig.uid is the host uid; the sandbox uid that
+            // Binder.getCallingUid() is virtualized to is AppConfig.buid.
+            uid = BActivityThread.getBUid();
+            if (uid <= 0) uid = BlackBoxCore.getHostUid();
+        } else {
             uid = BlackBoxCore.getHostUid();
         }
         String pkg;
