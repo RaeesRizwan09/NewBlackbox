@@ -34,7 +34,11 @@ class GmsRepository {
         val installResult = BlackBoxCore.get().installGms(userID)
 
         val result = if (installResult.success) {
-            getString(R.string.install_success)
+            if (installResult.msg.isNullOrEmpty()) {
+                getString(R.string.install_success)
+            } else {
+                getString(R.string.install_success_impl, installResult.msg)
+            }
         } else {
             getString(R.string.install_fail, installResult.msg)
         }

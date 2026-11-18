@@ -125,55 +125,45 @@ public class IConnectivityManagerProxy extends BinderInvocationStub {
 
     
     private static Object createNetworkCapabilities() {
-        // API 31+ exposes a public no-argument constructor. Reflection on the
-        // hidden one is blocked by the hidden-API policy on modern releases,
-        // which is why the old fallback kept failing.
-        if (android.os.Build.VERSION.SDK_INT >= 31) {
-            try {
-                android.net.NetworkCapabilities nc = new android.net.NetworkCapabilities();
-                nc.addTransportType(android.net.NetworkCapabilities.TRANSPORT_WIFI);
-                nc.addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET);
-                nc.addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED);
-                nc.addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_TRUSTED);
-                nc.addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED);
-                nc.addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN);
-                return nc;
-            } catch (Throwable t) {
-                Slog.w(TAG, "Could not create NetworkCapabilities: " + t);
-            }
-        }
+        // addTransportType()/addCapability() are hidden from the SDK stubs, so
+        // they cannot be called directly (compile error "cannot find symbol").
+        // Call them reflectively: they are greylisted rather than blocked for
+        // apps that target API 28, which is what this app does.
         try {
-            
             Class<?> networkCapabilitiesClass = Class.forName("android.net.NetworkCapabilities");
-            Constructor<?> constructor = networkCapabilitiesClass.getDeclaredConstructor();
-            constructor.setAccessible(true);
-            Object nc = constructor.newInstance();
-            
-            
-            try {
-                Method addTransportTypeMethod = nc.getClass().getMethod("addTransportType", int.class);
-                addTransportTypeMethod.invoke(nc, android.net.NetworkCapabilities.TRANSPORT_WIFI);
-                addTransportTypeMethod.invoke(nc, android.net.NetworkCapabilities.TRANSPORT_CELLULAR);
-            } catch (Exception e) {
-                Slog.w(TAG, "Could not add transport types: " + e.getMessage());
+            Object nc;
+            if (android.os.Build.VERSION.SDK_INT >= 31) {
+                // Public no-argument constructor exists from API 31 on.
+                nc = networkCapabilitiesClass.getConstructor().newInstance();
+            } else {
+                Constructor<?> constructor = networkCapabilitiesClass.getDeclaredConstructor();
+                constructor.setAccessible(true);
+                nc = constructor.newInstance();
             }
 
-            
-            try {
-                Method addCapabilityMethod = nc.getClass().getMethod("addCapability", int.class);
-                addCapabilityMethod.invoke(nc, android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET);
-                addCapabilityMethod.invoke(nc, android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED);
-                addCapabilityMethod.invoke(nc, android.net.NetworkCapabilities.NET_CAPABILITY_TRUSTED);
-                addCapabilityMethod.invoke(nc, android.net.NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED);
-                addCapabilityMethod.invoke(nc, android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN);
-                addCapabilityMethod.invoke(nc, android.net.NetworkCapabilities.NET_CAPABILITY_NOT_CONGESTED);
-            } catch (Exception e) {
-                Slog.w(TAG, "Could not add capabilities: " + e.getMessage());
+            Method addTransportTypeMethod =
+                    networkCapabilitiesClass.getMethod("addTransportType", int.class);
+            addTransportTypeMethod.setAccessible(true);
+            addTransportTypeMethod.invoke(nc, android.net.NetworkCapabilities.TRANSPORT_WIFI);
+            addTransportTypeMethod.invoke(nc, android.net.NetworkCapabilities.TRANSPORT_CELLULAR);
+
+            Method addCapabilityMethod =
+                    networkCapabilitiesClass.getMethod("addCapability", int.class);
+            addCapabilityMethod.setAccessible(true);
+            int[] capabilities = new int[]{
+                    android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET,
+                    android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED,
+                    android.net.NetworkCapabilities.NET_CAPABILITY_TRUSTED,
+                    android.net.NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED,
+                    android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN,
+                    android.net.NetworkCapabilities.NET_CAPABILITY_NOT_CONGESTED,
+            };
+            for (int capability : capabilities) {
+                addCapabilityMethod.invoke(nc, capability);
             }
-            
             return nc;
-        } catch (Exception e) {
-            Slog.w(TAG, "Failed to create NetworkCapabilities via reflection: " + e.getMessage());
+        } catch (Throwable t) {
+            Slog.w(TAG, "Failed to create NetworkCapabilities: " + t);
             return null;
         }
     }
@@ -350,11 +340,18 @@ public class IConnectivityManagerProxy extends BinderInvocationStub {
             Object result = null;
             try {
                 result = method.invoke(who, args);
-            } catch (Throwable ignored) {
+            } catch (Throwable first) {
                 // The host rejects the sandbox Network: "Package <app> does
                 // not belong to <host uid>". Never let that reach the app:
                 // Chromium's network stack treats an exception here as fatal
                 // and kills its init thread.
+                Slog.w(TAG, "getNetworkCapabilities rejected the sandbox Network: " + first);
+                // A null Network asks for the default network, which the host
+                // resolves without checking ownership.
+                try {
+                    result = method.invoke(who, new Object[]{null});
+                } catch (Throwable ignored) {
+                }
             }
             if (result != null) {
                 try {
@@ -368,10 +365,9 @@ public class IConnectivityManagerProxy extends BinderInvocationStub {
             }
             if (android.os.Build.VERSION.SDK_INT >= 21) {
                 Object nc = IConnectivityManagerProxy.createNetworkCapabilities();
-                if (nc != null) {
-                    Slog.d(TAG, "Created NetworkCapabilities for sandboxed app (fallback)");
-                    return nc;
-                }
+                Slog.d(TAG, "getNetworkCapabilities: answering with a synthetic "
+                        + "NetworkCapabilities (" + (nc != null) + ")");
+                return nc;
             }
             return null;
         }

@@ -1237,7 +1237,9 @@ public class BlackBoxCore extends ClientConfiguration {
         // of whether the host has real Google Play Services.
         if (sPreferMicroG) {
             Slog.i(TAG, "installGms: prefer-microG enabled, installing bundled microG");
-            return GmsCore.installMicroG(userId);
+            InstallResult result = GmsCore.installMicroG(userId);
+            markInstalled(result, "microG Services");
+            return result;
         }
         // Default: mirror the host's real Google Play Services. On hosts
         // without GMS (or where the lookup fails), fall back to the bundled
@@ -1245,10 +1247,26 @@ public class BlackBoxCore extends ClientConfiguration {
         // FCM push) without any device-side Google dependency.
         if (GmsCore.isSupportGms()) {
             Slog.i(TAG, "installGms: installing the host's real Google Play Services");
-            return GmsCore.installGApps(userId);
+            InstallResult result = GmsCore.installGApps(userId);
+            markInstalled(result, "Google Play services");
+            return result;
         }
         Slog.i(TAG, "installGms: host has no real GMS, falling back to microG");
-        return GmsCore.installMicroG(userId);
+        InstallResult result = GmsCore.installMicroG(userId);
+        markInstalled(result, "microG Services (host has no GMS)");
+        return result;
+    }
+
+    /**
+     * Records which implementation was installed in {@code result.msg} so the
+     * GMS Manager can say "Installed: microG Services" instead of a bare
+     * "Installed Successfully" - the two look identical in the app list and
+     * that ambiguity has already caused a wasted registration attempt.
+     */
+    private static void markInstalled(InstallResult result, String implementation) {
+        if (result != null && result.success) {
+            result.msg = implementation;
+        }
     }
 
     public boolean uninstallGms(int userId) {
