@@ -10,13 +10,23 @@ public class AttributionSourceUtils {
 
     
     public static void fixAttributionSourceInArgs(Object[] args) {
+        fixAttributionSourceInArgs(args, BlackBoxCore.getHostUid(), BlackBoxCore.getHostPkg());
+    }
+
+    /**
+     * Rewrites every AttributionSource in the arguments to the given uid and
+     * package. Sandbox-hosted providers need the caller's virtual uid (the
+     * one Binder.getCallingUid() is virtualized to inside the sandbox);
+     * host providers need the host uid.
+     */
+    public static void fixAttributionSourceInArgs(Object[] args, int uid, String pkg) {
         if (args == null) return;
         
         for (int i = 0; i < args.length; i++) {
             Object arg = args[i];
             if (arg != null && arg.getClass().getName().contains("AttributionSource")) {
                 try {
-                    fixAttributionSourceUid(arg);
+                    fixAttributionSourceUid(arg, uid, pkg);
                     Slog.d(TAG, "Fixed AttributionSource UID in method arguments");
                 } catch (Exception e) {
                     Slog.w(TAG, "Failed to fix AttributionSource in args: " + e.getMessage());
@@ -29,7 +39,7 @@ public class AttributionSourceUtils {
             Object arg = args[i];
             if (arg != null && arg.getClass().getName().contains("Bundle")) {
                 try {
-                    fixAttributionSourceInBundle(arg);
+                    fixAttributionSourceInBundle(arg, uid, pkg);
                 } catch (Exception e) {
                     Slog.w(TAG, "Failed to fix AttributionSource in Bundle: " + e.getMessage());
                 }
@@ -39,6 +49,10 @@ public class AttributionSourceUtils {
 
     
     public static void fixAttributionSourceUid(Object attributionSource) {
+        fixAttributionSourceUid(attributionSource, BlackBoxCore.getHostUid(), BlackBoxCore.getHostPkg());
+    }
+
+    public static void fixAttributionSourceUid(Object attributionSource, int uid, String pkg) {
         try {
             if (attributionSource == null) return;
             
@@ -51,7 +65,7 @@ public class AttributionSourceUtils {
                 try {
                     java.lang.reflect.Field uidField = attributionSourceClass.getDeclaredField(fieldName);
                     uidField.setAccessible(true);
-                    uidField.set(attributionSource, BlackBoxCore.getHostUid());
+                    uidField.set(attributionSource, uid);
                     Slog.d(TAG, "Fixed AttributionSource UID via field: " + fieldName);
                     break;
                 } catch (NoSuchFieldException e) {
@@ -63,7 +77,7 @@ public class AttributionSourceUtils {
             try {
                 java.lang.reflect.Method setUidMethod = attributionSourceClass.getDeclaredMethod("setUid", int.class);
                 setUidMethod.setAccessible(true);
-                setUidMethod.invoke(attributionSource, BlackBoxCore.getHostUid());
+                setUidMethod.invoke(attributionSource, uid);
                 Slog.d(TAG, "Fixed AttributionSource UID via setter method");
             } catch (Exception e) {
                 
@@ -76,7 +90,7 @@ public class AttributionSourceUtils {
                 try {
                     java.lang.reflect.Field packageField = attributionSourceClass.getDeclaredField(fieldName);
                     packageField.setAccessible(true);
-                    packageField.set(attributionSource, BlackBoxCore.getHostPkg());
+                    packageField.set(attributionSource, pkg);
                     Slog.d(TAG, "Fixed AttributionSource package name via field: " + fieldName);
                     break;
                 } catch (NoSuchFieldException e) {
@@ -91,6 +105,10 @@ public class AttributionSourceUtils {
 
     
     public static void fixAttributionSourceInBundle(Object bundle) {
+        fixAttributionSourceInBundle(bundle, BlackBoxCore.getHostUid(), BlackBoxCore.getHostPkg());
+    }
+
+    public static void fixAttributionSourceInBundle(Object bundle, int uid, String pkg) {
         try {
             if (bundle == null) return;
             
@@ -104,7 +122,7 @@ public class AttributionSourceUtils {
                     Object value = getMethod.invoke(bundle, key);
                     
                     if (value != null && value.getClass().getName().contains("AttributionSource")) {
-                        fixAttributionSourceUid(value);
+                        fixAttributionSourceUid(value, uid, pkg);
                         Slog.d(TAG, "Fixed AttributionSource UID in Bundle key: " + key);
                     }
                 } catch (Exception e) {

@@ -56,6 +56,22 @@ public class ContentProviderStub extends ClassInvocationStub implements BContent
 
     }
 
+    /**
+     * Host providers expect the host uid in the attribution chain (the
+     * sandboxed app really runs as the host uid). Providers hosted inside the
+     * sandbox expect the caller's virtual uid, because sandbox processes
+     * virtualize Binder.getCallingUid() to it.
+     */
+    private void rewriteAttribution(Object[] args) {
+        if (args == null) return;
+        int uid = mKeepVirtualUid ? BActivityThread.getUid() : BlackBoxCore.getHostUid();
+        if (uid <= 0) {
+            uid = BlackBoxCore.getHostUid();
+        }
+        String pkg = mKeepVirtualUid ? mAppPkg : BlackBoxCore.getHostPkg();
+        AttributionSourceUtils.fixAttributionSourceInArgs(args, uid, pkg);
+    }
+
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
         if ("asBinder".equals(method.getName())) {
@@ -68,10 +84,7 @@ public class ContentProviderStub extends ClassInvocationStub implements BContent
         
         
         if ("call".equals(methodName)) {
-            
-            if (!mKeepVirtualUid) {
-                AttributionSourceUtils.fixAttributionSourceInArgs(args);
-            }
+            rewriteAttribution(args);
         } else {
             
             if (args != null && args.length > 0) {
@@ -87,9 +100,7 @@ public class ContentProviderStub extends ClassInvocationStub implements BContent
                     }
                 }
                 
-                if (!mKeepVirtualUid) {
-                    AttributionSourceUtils.fixAttributionSourceInArgs(args);
-                }
+                rewriteAttribution(args);
             }
         }
         
