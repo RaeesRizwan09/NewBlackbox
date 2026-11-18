@@ -142,8 +142,9 @@ public class GmsCore {
             // In a sandbox the normal microG triggers (BOOT_COMPLETED,
             // AIRPLANE_MODE broadcasts, periodic alarms) never arrive, so its
             // device check-in never runs and GCM registration answers
-            // SERVICE_NOT_AVAILABLE. Kick the check-in and the FCM connection
-            // explicitly right after install.
+            // SERVICE_NOT_AVAILABLE. Enable both features and kick the
+            // check-in and the FCM connection explicitly right after install.
+            seedMicroGSettings(userId);
             kickMicroGBackgroundServices(userId);
             return result;
         } catch (Throwable t) {
@@ -176,6 +177,63 @@ public class GmsCore {
             // No bundled asset in this build.
         }
         return null;
+    }
+
+    /**
+     * microG reads its defaults from /system/etc/microg.xml when installed as
+     * a system app. A sandboxed install has no such file, so check-in and FCM
+     * default to disabled and registration always fails with "Checkin
+     * disabled" / SERVICE_NOT_AVAILABLE. Seed those two switches into microG's
+     * default preferences, leaving any existing (user chosen) values alone.
+     */
+    private static void seedMicroGSettings(int userId) {
+        final String[] keys = {"checkin_enable_service", "gcm_enable_mcs_service"};
+        try {
+            java.io.File dir = new java.io.File(
+                    top.niunaijun.blackbox.core.env.BEnvironment.getDataDir(GMS_PKG, userId),
+                    "shared_prefs");
+            if (!dir.isDirectory() && !dir.mkdirs()) {
+                Slog.w(TAG, "seedMicroGSettings: cannot create " + dir);
+                return;
+            }
+            java.io.File file = new java.io.File(dir, GMS_PKG + "_preferences.xml");
+            String xml = file.isFile()
+                    ? readFully(file)
+                    : "<?xml version='1.0' encoding='utf-8' standalone='yes' ?>\n<map>\n</map>\n";
+            boolean changed = false;
+            for (String key : keys) {
+                if (xml.contains("name=\"" + key + "\"")) {
+                    continue;
+                }
+                String line = "    <boolean name=\"" + key + "\" value=\"true\" />\n";
+                int end = xml.lastIndexOf("</map>");
+                xml = end >= 0
+                        ? xml.substring(0, end) + line + xml.substring(end)
+                        : xml + line;
+                changed = true;
+            }
+            if (!changed) {
+                return;
+            }
+            try (java.io.FileOutputStream out = new java.io.FileOutputStream(file)) {
+                out.write(xml.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            Slog.i(TAG, "seedMicroGSettings: check-in and FCM enabled for user " + userId);
+        } catch (Throwable t) {
+            Slog.w(TAG, "seedMicroGSettings failed", t);
+        }
+    }
+
+    private static String readFully(java.io.File file) throws java.io.IOException {
+        byte[] buf = new byte[(int) file.length()];
+        try (java.io.FileInputStream in = new java.io.FileInputStream(file)) {
+            int off = 0;
+            int n;
+            while (off < buf.length && (n = in.read(buf, off, buf.length - off)) > 0) {
+                off += n;
+            }
+        }
+        return new String(buf, java.nio.charset.StandardCharsets.UTF_8);
     }
 
     /**
