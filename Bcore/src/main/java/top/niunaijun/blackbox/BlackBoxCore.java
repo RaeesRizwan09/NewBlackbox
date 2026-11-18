@@ -1233,6 +1233,13 @@ public class BlackBoxCore extends ClientConfiguration {
     }
 
     public InstallResult installGms(int userId) {
+        // Installing GMS while the other implementation is still present used
+        // to silently keep the old one (installPackages skips installed
+        // packages), so flipping the switch appeared to do nothing. Replace it
+        // explicitly so "enable" always yields the selected implementation.
+        boolean wantMicroG = sPreferMicroG || !GmsCore.isSupportGms();
+        replaceGmsIfNeeded(userId, wantMicroG);
+
         // Prefer-microG switch: force the bundled microG GmsCore regardless
         // of whether the host has real Google Play Services.
         if (sPreferMicroG) {
@@ -1255,6 +1262,24 @@ public class BlackBoxCore extends ClientConfiguration {
         InstallResult result = GmsCore.installMicroG(userId);
         markInstalled(result, "microG Services (host has no GMS)");
         return result;
+    }
+
+    /**
+     * Removes the sandboxed com.google.android.gms when it is the other
+     * implementation than the one about to be installed.
+     */
+    private static void replaceGmsIfNeeded(int userId, boolean wantMicroG) {
+        if (!isInstallGms(userId)) {
+            return;
+        }
+        boolean installedMicroG = GmsCore.isInstalledMicroG(userId);
+        if (installedMicroG == wantMicroG) {
+            return;
+        }
+        Slog.i(TAG, "installGms: replacing "
+                + (installedMicroG ? "microG" : "Google Play services") + " with "
+                + (wantMicroG ? "microG" : "Google Play services"));
+        GmsCore.uninstallGmsPackage(userId);
     }
 
     /**

@@ -1,11 +1,15 @@
 package top.niunaijun.blackbox.core;
 
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.Signature;
 
+import java.io.File;
 import java.util.HashSet;
 import java.util.Set;
 
 import top.niunaijun.blackbox.BlackBoxCore;
+import top.niunaijun.blackbox.core.env.BEnvironment;
 import top.niunaijun.blackbox.entity.pm.InstallResult;
 import top.niunaijun.blackbox.utils.Slog;
 
@@ -91,6 +95,48 @@ public class GmsCore {
     public static void uninstallGApps(int userId) {
         uninstallPackages(GOOGLE_SERVICE, userId);
         uninstallPackages(GOOGLE_APP, userId);
+    }
+
+    /** Removes only com.google.android.gms, leaving the other Google packages alone. */
+    public static void uninstallGmsPackage(int userId) {
+        Set<String> gms = new HashSet<>();
+        gms.add(GMS_PKG);
+        uninstallPackages(gms, userId);
+    }
+
+    /**
+     * True when the sandboxed com.google.android.gms is the bundled microG
+     * rather than a copy of the host's Google build.
+     *
+     * <p>The sandbox PackageManager merges the host's PackageInfo into its
+     * answers, so asking it for GMS signatures always yields Google's
+     * certificate even when microG is what is actually installed. Read the
+     * signature of the APK file that the sandbox really installed instead.
+     */
+    public static boolean isInstalledMicroG(int userId) {
+        try {
+            if (!BlackBoxCore.get().isInstallGms(userId)) {
+                return false;
+            }
+            File apk = BEnvironment.getBaseApkDir(GMS_PKG);
+            if (!apk.isFile()) {
+                return false;
+            }
+            PackageInfo sandboxed = BlackBoxCore.getPackageManager()
+                    .getPackageArchiveInfo(apk.getAbsolutePath(), PackageManager.GET_SIGNATURES);
+            PackageInfo host = BlackBoxCore.getPackageManager()
+                    .getPackageInfo(GMS_PKG, PackageManager.GET_SIGNATURES);
+            Signature[] sandboxedSignatures = sandboxed == null ? null : sandboxed.signatures;
+            Signature[] hostSignatures = host == null ? null : host.signatures;
+            if (sandboxedSignatures == null || sandboxedSignatures.length == 0
+                    || hostSignatures == null || hostSignatures.length == 0) {
+                return false;
+            }
+            return !sandboxedSignatures[0].equals(hostSignatures[0]);
+        } catch (Throwable t) {
+            Slog.w(TAG, "isInstalledMicroG: " + t);
+            return false;
+        }
     }
 
     public static void remove(String packageName) {
