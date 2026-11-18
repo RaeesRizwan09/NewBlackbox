@@ -125,6 +125,23 @@ public class IConnectivityManagerProxy extends BinderInvocationStub {
 
     
     private static Object createNetworkCapabilities() {
+        // API 31+ exposes a public no-argument constructor. Reflection on the
+        // hidden one is blocked by the hidden-API policy on modern releases,
+        // which is why the old fallback kept failing.
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            try {
+                android.net.NetworkCapabilities nc = new android.net.NetworkCapabilities();
+                nc.addTransportType(android.net.NetworkCapabilities.TRANSPORT_WIFI);
+                nc.addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET);
+                nc.addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+                nc.addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_TRUSTED);
+                nc.addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED);
+                nc.addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN);
+                return nc;
+            } catch (Throwable t) {
+                Slog.w(TAG, "Could not create NetworkCapabilities: " + t);
+            }
+        }
         try {
             
             Class<?> networkCapabilitiesClass = Class.forName("android.net.NetworkCapabilities");
@@ -330,38 +347,33 @@ public class IConnectivityManagerProxy extends BinderInvocationStub {
     public static class GetNetworkCapabilities extends MethodHook {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            if (android.os.Build.VERSION.SDK_INT >= 21) {
+            Object result = null;
+            try {
+                result = method.invoke(who, args);
+            } catch (Throwable ignored) {
+                // The host rejects the sandbox Network: "Package <app> does
+                // not belong to <host uid>". Never let that reach the app:
+                // Chromium's network stack treats an exception here as fatal
+                // and kills its init thread.
+            }
+            if (result != null) {
                 try {
-                    
-                    Object result = method.invoke(who, args);
-                    if (result != null) {
-                        
-                        try {
-                            Method addCapabilityMethod = result.getClass().getMethod("addCapability", int.class);
-                            addCapabilityMethod.setAccessible(true);
-                            addCapabilityMethod.invoke(result, 12); 
-                            addCapabilityMethod.invoke(result, 16); 
-                        } catch (Exception e) {
-                             
-                            e.printStackTrace();
-                        }
-                        return result;
-                    }
-
-                    
-                    Object nc;
-                    
-                    nc = IConnectivityManagerProxy.createNetworkCapabilities();
-                    
-                    if (nc != null) {
-                        Slog.d(TAG, "Created enhanced NetworkCapabilities for sandboxed app (fallback)");
-                        return nc;
-                    }
-                } catch (Exception e) {
-                    Slog.w(TAG, "Error creating NetworkCapabilities: " + e.getMessage());
+                    Method addCapabilityMethod = result.getClass().getMethod("addCapability", int.class);
+                    addCapabilityMethod.setAccessible(true);
+                    addCapabilityMethod.invoke(result, 12);
+                    addCapabilityMethod.invoke(result, 16);
+                } catch (Throwable ignored) {
+                }
+                return result;
+            }
+            if (android.os.Build.VERSION.SDK_INT >= 21) {
+                Object nc = IConnectivityManagerProxy.createNetworkCapabilities();
+                if (nc != null) {
+                    Slog.d(TAG, "Created NetworkCapabilities for sandboxed app (fallback)");
+                    return nc;
                 }
             }
-            return method.invoke(who, args);
+            return null;
         }
     }
 
