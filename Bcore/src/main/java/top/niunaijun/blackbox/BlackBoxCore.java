@@ -1244,6 +1244,7 @@ public class BlackBoxCore extends ClientConfiguration {
         // microG GmsCore so sandboxed apps still get GMS bindings (notably
         // FCM push) without any device-side Google dependency.
         if (GmsCore.isSupportGms()) {
+            Slog.i(TAG, "installGms: installing the host's real Google Play Services");
             return GmsCore.installGApps(userId);
         }
         Slog.i(TAG, "installGms: host has no real GMS, falling back to microG");

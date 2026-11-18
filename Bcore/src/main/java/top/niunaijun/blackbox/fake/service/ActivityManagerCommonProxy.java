@@ -28,6 +28,46 @@ import static android.content.pm.PackageManager.GET_META_DATA;
 public class ActivityManagerCommonProxy {
     public static final String TAG = "CommonStub";
 
+    /**
+     * Registration blocks (WhatsApp's "parole" activities) carry the server
+     * supplied reason in the intent extras, and the screen itself only shows a
+     * generic message. Mirror those extras into logcat so a block can be
+     * diagnosed instead of guessed at.
+     */
+    private static void logBlockingExtras(Intent intent) {
+        if (intent == null) {
+            return;
+        }
+        ComponentName component = intent.getComponent();
+        if (component == null) {
+            return;
+        }
+        String className = component.getClassName();
+        if (className == null
+                || !(className.contains("parole") || className.contains("registration.app"))) {
+            return;
+        }
+        Bundle extras = intent.getExtras();
+        if (extras == null || extras.isEmpty()) {
+            return;
+        }
+        StringBuilder builder = new StringBuilder("Intent extras: ");
+        for (String key : extras.keySet()) {
+            Object value;
+            try {
+                value = extras.get(key);
+            } catch (Throwable t) {
+                continue;
+            }
+            String text = String.valueOf(value);
+            if (text.length() > 160) {
+                text = text.substring(0, 160) + "...";
+            }
+            builder.append(key).append('=').append(text).append("; ");
+        }
+        Slog.d(TAG, builder.toString());
+    }
+
     @ProxyMethod("startActivity")
     public static class StartActivity extends MethodHook {
         @Override
@@ -35,6 +75,7 @@ public class ActivityManagerCommonProxy {
             MethodParameterUtils.replaceFirstAppPkg(args);
             Intent intent = getIntent(args);
             Slog.d(TAG, "Hook in : " + intent);
+            logBlockingExtras(intent);
             assert intent != null;
             
             
