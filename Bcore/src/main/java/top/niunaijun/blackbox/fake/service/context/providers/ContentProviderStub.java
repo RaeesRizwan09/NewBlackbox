@@ -19,9 +19,24 @@ public class ContentProviderStub extends ClassInvocationStub implements BContent
     private IInterface mBase;
     private String mAppPkg;
 
+    /**
+     * When the provider lives inside the sandbox, the caller's attribution
+     * source must keep its virtual uid: sandbox processes virtualize
+     * Binder.getCallingUid(), so rewriting the uid to the host uid makes the
+     * provider reject the call ("Calling uid ... doesn't match source uid").
+     * Host providers still need the host uid.
+     */
+    private boolean mKeepVirtualUid;
+
     public IInterface wrapper(final IInterface contentProviderProxy, final String appPkg) {
+        return wrapper(contentProviderProxy, appPkg, false);
+    }
+
+    public IInterface wrapper(final IInterface contentProviderProxy, final String appPkg,
+                              boolean keepVirtualUid) {
         mBase = contentProviderProxy;
         mAppPkg = appPkg;
+        mKeepVirtualUid = keepVirtualUid;
         injectHook();
         return (IInterface) getProxyInvocation();
     }
@@ -54,7 +69,9 @@ public class ContentProviderStub extends ClassInvocationStub implements BContent
         
         if ("call".equals(methodName)) {
             
-            AttributionSourceUtils.fixAttributionSourceInArgs(args);
+            if (!mKeepVirtualUid) {
+                AttributionSourceUtils.fixAttributionSourceInArgs(args);
+            }
         } else {
             
             if (args != null && args.length > 0) {
@@ -70,7 +87,9 @@ public class ContentProviderStub extends ClassInvocationStub implements BContent
                     }
                 }
                 
-                AttributionSourceUtils.fixAttributionSourceInArgs(args);
+                if (!mKeepVirtualUid) {
+                    AttributionSourceUtils.fixAttributionSourceInArgs(args);
+                }
             }
         }
         
