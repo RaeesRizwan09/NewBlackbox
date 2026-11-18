@@ -32,6 +32,7 @@ import top.niunaijun.blackbox.fake.hook.ProxyMethod;
 import top.niunaijun.blackbox.fake.service.base.PkgMethodProxy;
 import top.niunaijun.blackbox.fake.service.base.ValueMethodProxy;
 import top.niunaijun.blackbox.utils.MethodParameterUtils;
+import top.niunaijun.blackbox.utils.GoogleSignatures;
 import top.niunaijun.blackbox.utils.Reflector;
 import top.niunaijun.blackbox.utils.Slog;
 import top.niunaijun.blackbox.utils.compat.BuildCompat;
@@ -135,11 +136,19 @@ public class IPackageManagerProxy extends BinderInvocationStub {
             
             
             if ("com.android.vending".equals(packageName)) {
-                return createFakeGooglePlayServicesPackageInfo();
+                PackageInfo fake = createFakeGooglePlayServicesPackageInfo();
+                // A Play Store record without Google's certificate is worse
+                // than no record: apps report "signature is invalid" and
+                // treat the sandbox as tampered with.
+                GoogleSignatures.apply(fake, GoogleSignatures.hostPackageInfo(method, who, args));
+                return fake;
             }
             
             PackageInfo packageInfo = BlackBoxCore.getBPackageManager().getPackageInfo(packageName, flags, BlackBoxCore.getUserId());
             if (packageInfo != null) {
+                if (GoogleSignatures.isGooglePackage(packageName)) {
+                    GoogleSignatures.apply(packageInfo, GoogleSignatures.hostPackageInfo(method, who, args));
+                }
                 
                 if (packageInfo.requestedPermissions != null && packageInfo.requestedPermissionsFlags != null) {
                     for (int i = 0; i < packageInfo.requestedPermissions.length; i++) {
