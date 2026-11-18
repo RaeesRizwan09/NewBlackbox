@@ -55,52 +55,74 @@ public class AttributionSourceUtils {
     public static void fixAttributionSourceUid(Object attributionSource, int uid, String pkg) {
         try {
             if (attributionSource == null) return;
-            
             Class<?> attributionSourceClass = attributionSource.getClass();
-            
-            
+
+            // Android 13 (API 33) wraps the real values in an
+            // AttributionSourceState object; AttributionSource itself has no
+            // uid or package field. Without this branch the rewrite silently
+            // does nothing and the provider still sees the host uid.
+            if (setAttributionSourceState(attributionSource, attributionSourceClass, uid, pkg)) {
+                return;
+            }
+
             String[] uidFieldNames = {"mUid", "uid", "mCallingUid", "callingUid", "mSourceUid", "sourceUid"};
-            
-            for (String fieldName : uidFieldNames) {
+            boolean uidSet = setField(attributionSource, attributionSourceClass, uidFieldNames, uid);
+
+            if (!uidSet) {
                 try {
-                    java.lang.reflect.Field uidField = attributionSourceClass.getDeclaredField(fieldName);
-                    uidField.setAccessible(true);
-                    uidField.set(attributionSource, uid);
-                    Slog.d(TAG, "Fixed AttributionSource UID via field: " + fieldName);
-                    break;
-                } catch (NoSuchFieldException e) {
-                    
+                    java.lang.reflect.Method setUidMethod =
+                            attributionSourceClass.getDeclaredMethod("setUid", int.class);
+                    setUidMethod.setAccessible(true);
+                    setUidMethod.invoke(attributionSource, uid);
+                    uidSet = true;
+                } catch (Throwable ignored) {
                 }
             }
-            
-            
-            try {
-                java.lang.reflect.Method setUidMethod = attributionSourceClass.getDeclaredMethod("setUid", int.class);
-                setUidMethod.setAccessible(true);
-                setUidMethod.invoke(attributionSource, uid);
-                Slog.d(TAG, "Fixed AttributionSource UID via setter method");
-            } catch (Exception e) {
-                
-            }
-            
-            
+
             String[] packageFieldNames = {"mPackageName", "packageName", "mSourcePackage", "sourcePackage"};
-            
-            for (String fieldName : packageFieldNames) {
-                try {
-                    java.lang.reflect.Field packageField = attributionSourceClass.getDeclaredField(fieldName);
-                    packageField.setAccessible(true);
-                    packageField.set(attributionSource, pkg);
-                    Slog.d(TAG, "Fixed AttributionSource package name via field: " + fieldName);
-                    break;
-                } catch (NoSuchFieldException e) {
-                    
-                }
+            setField(attributionSource, attributionSourceClass, packageFieldNames, pkg);
+
+            if (uidSet) {
+                Slog.d(TAG, "Fixed AttributionSource uid -> " + uid + " pkg -> " + pkg);
+            } else {
+                Slog.w(TAG, "Could not rewrite AttributionSource uid (no known field)");
             }
-            
-        } catch (Exception e) {
+        } catch (Throwable e) {
             Slog.w(TAG, "Error fixing AttributionSource UID: " + e.getMessage());
         }
+    }
+
+    private static boolean setAttributionSourceState(Object attributionSource, Class<?> clazz,
+                                                     int uid, String pkg) {
+        try {
+            java.lang.reflect.Field stateField = clazz.getDeclaredField("mAttributionSourceState");
+            stateField.setAccessible(true);
+            Object state = stateField.get(attributionSource);
+            if (state == null) return false;
+            Class<?> stateClass = state.getClass();
+            boolean uidSet = setField(state, stateClass, new String[]{"uid", "mUid", "callingUid"}, uid);
+            setField(state, stateClass, new String[]{"packageName", "mPackageName"}, pkg);
+            if (uidSet) {
+                Slog.d(TAG, "Fixed AttributionSource uid -> " + uid + " pkg -> " + pkg + " (state)");
+            }
+            return uidSet;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** Sets the first field that exists on the class; returns whether one was set. */
+    private static boolean setField(Object target, Class<?> clazz, String[] names, Object value) {
+        for (String name : names) {
+            try {
+                java.lang.reflect.Field field = clazz.getDeclaredField(name);
+                field.setAccessible(true);
+                field.set(target, value);
+                return true;
+            } catch (Throwable ignored) {
+            }
+        }
+        return false;
     }
 
     
