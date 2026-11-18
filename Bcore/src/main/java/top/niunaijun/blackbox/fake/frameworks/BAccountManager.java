@@ -99,8 +99,12 @@ public class BAccountManager extends BlackManager<IBAccountManagerService> {
     }
 
     public boolean addAccountExplicitly(Account account, String password, Bundle extras) {
+        return addAccountExplicitly(account, password, extras, BActivityThread.getUserId());
+    }
+
+    public boolean addAccountExplicitly(Account account, String password, Bundle extras, int userId) {
         try {
-            return getService().addAccountExplicitly(account, password, extras, BActivityThread.getUserId());
+            return getService().addAccountExplicitly(account, password, extras, userId);
         } catch (RemoteException e) {
             e.printStackTrace();
         }

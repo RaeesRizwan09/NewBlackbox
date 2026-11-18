@@ -11,7 +11,9 @@ import java.util.Set;
 import top.niunaijun.blackbox.BlackBoxCore;
 import top.niunaijun.blackbox.core.env.BEnvironment;
 import top.niunaijun.blackbox.entity.pm.InstallResult;
+import top.niunaijun.blackbox.fake.frameworks.BAccountManager;
 import top.niunaijun.blackbox.utils.Slog;
+import top.niunaijun.blackbox.utils.SpoofGoogleAccount;
 
 public class GmsCore {
     private static final String TAG = "GmsCore";
@@ -191,6 +193,7 @@ public class GmsCore {
             // SERVICE_NOT_AVAILABLE. Enable both features and kick the
             // check-in and the FCM connection explicitly right after install.
             seedMicroGSettings(userId);
+            seedSpoofGoogleAccount(userId);
             kickMicroGBackgroundServices(userId);
             return result;
         } catch (Throwable t) {
@@ -232,6 +235,21 @@ public class GmsCore {
      * disabled" / SERVICE_NOT_AVAILABLE. Seed those two switches into microG's
      * default preferences, leaving any existing (user chosen) values alone.
      */
+    /**
+     * Registers the spoofed Google account in the sandbox account store, so
+     * apps that ask the account service (rather than only the in-process
+     * AccountManager cache) still see a signed-in Google account.
+     */
+    private static void seedSpoofGoogleAccount(int userId) {
+        try {
+            boolean added = BAccountManager.get().addAccountExplicitly(
+                    SpoofGoogleAccount.primary(), null, new android.os.Bundle(), userId);
+            Slog.i(TAG, "seedSpoofGoogleAccount: added=" + added + " for user " + userId);
+        } catch (Throwable t) {
+            Slog.w(TAG, "seedSpoofGoogleAccount failed: " + t);
+        }
+    }
+
     private static void seedMicroGSettings(int userId) {
         final String[] keys = {"checkin_enable_service", "gcm_enable_mcs_service"};
         try {

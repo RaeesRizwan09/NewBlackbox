@@ -15,6 +15,7 @@ import top.niunaijun.blackbox.fake.hook.BinderInvocationStub;
 import top.niunaijun.blackbox.fake.hook.MethodHook;
 import top.niunaijun.blackbox.fake.hook.ProxyMethod;
 import top.niunaijun.blackbox.utils.Slog;
+import top.niunaijun.blackbox.utils.SpoofGoogleAccount;
 
 
 public class IAccountManagerProxy extends BinderInvocationStub {
@@ -55,7 +56,11 @@ public class IAccountManagerProxy extends BinderInvocationStub {
 
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            return BAccountManager.get().getPassword((Account) args[0]);
+            Account account = (Account) args[0];
+            if (SpoofGoogleAccount.isSpoofed(account)) {
+                return "";
+            }
+            return BAccountManager.get().getPassword(account);
         }
     }
 
@@ -91,7 +96,15 @@ public class IAccountManagerProxy extends BinderInvocationStub {
 
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            return BAccountManager.get().getAccountsByTypeForPackage((String) args[0], (String) args[1]);
+            String type = (String) args[0];
+            Account[] accounts = BAccountManager.get()
+                    .getAccountsByTypeForPackage(type, (String) args[1]);
+            if ((accounts == null || accounts.length == 0)
+                    && SpoofGoogleAccount.isGoogleType(type)) {
+                Slog.d(TAG, "getAccountsByTypeForPackage: returning spoofed Google accounts");
+                return SpoofGoogleAccount.accounts();
+            }
+            return accounts;
         }
     }
 
@@ -110,7 +123,13 @@ public class IAccountManagerProxy extends BinderInvocationStub {
 
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            BAccountManager.get().getAccountsByFeatures((IAccountManagerResponse) args[0], (String) args[1], (String[]) args[2]);
+            String type = (String) args[1];
+            if (SpoofGoogleAccount.isGoogleType(type)) {
+                Slog.d(TAG, "getAccountsByFeatures: returning spoofed Google accounts");
+                ((IAccountManagerResponse) args[0]).onResult(SpoofGoogleAccount.accountsBundle());
+                return 0;
+            }
+            BAccountManager.get().getAccountsByFeatures((IAccountManagerResponse) args[0], type, (String[]) args[2]);
             return 0;
         }
     }
@@ -120,7 +139,14 @@ public class IAccountManagerProxy extends BinderInvocationStub {
 
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            return BAccountManager.get().getAccountsAsUser((String) args[0]);
+            String type = (String) args[0];
+            Account[] accounts = BAccountManager.get().getAccountsAsUser(type);
+            if ((accounts == null || accounts.length == 0)
+                    && SpoofGoogleAccount.isGoogleType(type)) {
+                Slog.d(TAG, "getAccountsAsUser: returning spoofed Google accounts");
+                return SpoofGoogleAccount.accounts();
+            }
+            return accounts;
         }
     }
 
@@ -177,7 +203,11 @@ public class IAccountManagerProxy extends BinderInvocationStub {
 
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            return BAccountManager.get().peekAuthToken((Account) args[0], (String) args[1]);
+            Account account = (Account) args[0];
+            if (SpoofGoogleAccount.isSpoofed(account)) {
+                return SpoofGoogleAccount.token(account);
+            }
+            return BAccountManager.get().peekAuthToken(account, (String) args[1]);
         }
     }
 
@@ -236,8 +266,15 @@ public class IAccountManagerProxy extends BinderInvocationStub {
 
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            BAccountManager.get().getAuthToken((IAccountManagerResponse) args[0],
-                    (Account) args[1],
+            Account account = (Account) args[1];
+            IAccountManagerResponse response = (IAccountManagerResponse) args[0];
+            if (SpoofGoogleAccount.isSpoofed(account)) {
+                Slog.d(TAG, "getAuthToken: issuing a spoofed token for " + account.name);
+                response.onResult(SpoofGoogleAccount.tokenBundle(account, (String) args[2]));
+                return 0;
+            }
+            BAccountManager.get().getAuthToken(response,
+                    account,
                     (String) args[2],
                     (boolean) args[3],
                     (boolean) args[4],
@@ -320,7 +357,11 @@ public class IAccountManagerProxy extends BinderInvocationStub {
 
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            BAccountManager.get().accountAuthenticated((Account) args[0]);
+            Account account = (Account) args[0];
+            if (SpoofGoogleAccount.isSpoofed(account)) {
+                return true;
+            }
+            BAccountManager.get().accountAuthenticated(account);
             return 0;
         }
     }
