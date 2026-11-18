@@ -116,26 +116,25 @@ public class GmsCore {
      */
     public static final String MICROG_APK_ASSET = "microg/gmscore.apk";
 
+    /** Kept out of debug APKs to keep CI artifacts small; free space on the phone. */
+    private static final long MIN_MICROG_BYTES = 50L * 1024 * 1024;
+
     /**
-     * Installs the bundled microG GmsCore into the sandbox. Used when the
-     * host device has no real Google Play Services to mirror (or the host
-     * package lookup fails). Writes the asset to a cache file first because
-     * the package manager needs a real file path.
+     * Installs microG GmsCore into the sandbox. Source order:
+     * 1. a device-local copy at Android/data/&lt;pkg&gt;/files/microG.apk
+     *    (adb-pushable, no internet or permission needed),
+     * 2. the APK bundled in assets (release builds).
      */
     public static InstallResult installMicroG(int userId) {
         try {
-            android.content.Context ctx = BlackBoxCore.getContext();
-            java.io.File out = new java.io.File(ctx.getCacheDir(), "microg_gmscore.apk");
-            try (java.io.InputStream in = ctx.getAssets().open(MICROG_APK_ASSET);
-                 java.io.OutputStream os = new java.io.FileOutputStream(out)) {
-                byte[] buf = new byte[8192];
-                int n;
-                while ((n = in.read(buf)) > 0) {
-                    os.write(buf, 0, n);
-                }
+            java.io.File apk = resolveMicroGApk();
+            if (apk == null) {
+                InstallResult error = new InstallResult();
+                return error.installError("microG APK not found. Push microG.apk to Android/data/"
+                        + BlackBoxCore.getHostPkg() + "/files/ and retry.");
             }
-            Slog.i(TAG, "installMicroG: staging microG asset (" + out.length() + " bytes)");
-            InstallResult result = BlackBoxCore.get().installPackageAsUser(out, userId);
+            Slog.i(TAG, "installMicroG: using " + apk.getAbsolutePath() + " (" + apk.length() + " bytes)");
+            InstallResult result = BlackBoxCore.get().installPackageAsUser(apk, userId);
             if (!result.success) {
                 Slog.e(TAG, "installMicroG failed: " + result.msg);
                 return result;
@@ -152,6 +151,31 @@ public class GmsCore {
             InstallResult error = new InstallResult();
             return error.installError(t.getMessage());
         }
+    }
+
+    private static java.io.File resolveMicroGApk() throws java.io.IOException {
+        android.content.Context ctx = BlackBoxCore.getContext();
+        java.io.File external = new java.io.File(ctx.getExternalFilesDir(null), "microG.apk");
+        if (external.isFile() && external.length() > MIN_MICROG_BYTES) {
+            return external;
+        }
+        // Fall back to the asset bundled into release builds.
+        java.io.File staged = new java.io.File(ctx.getCacheDir(), "microg_gmscore.apk");
+        try (java.io.InputStream in = ctx.getAssets().open(MICROG_APK_ASSET)) {
+            try (java.io.OutputStream os = new java.io.FileOutputStream(staged)) {
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) > 0) {
+                    os.write(buf, 0, n);
+                }
+            }
+            if (staged.length() > MIN_MICROG_BYTES) {
+                return staged;
+            }
+        } catch (java.io.IOException ignored) {
+            // No bundled asset in this build.
+        }
+        return null;
     }
 
     /**

@@ -31,9 +31,12 @@ tasks.register('ensureMicroGAsset') {
     }
 }
 
-// The asset must be in place before any asset-merge task runs.
+// The asset must be in place before any RELEASE asset-merge runs. Debug
+// builds deliberately skip it: a ~108 MB asset inside every debug APK made
+// CI pulls expensive, and the engine can install microG from a device-local
+// file instead (Android/data/<pkg>/files/microG.apk).
 tasks.configureEach { t ->
-    if (t.name.startsWith('merge') && t.name.endsWith('Assets')) {
+    if (t.name.startsWith('merge') && t.name.endsWith('ReleaseAssets')) {
         t.dependsOn 'ensureMicroGAsset'
     }
 }
