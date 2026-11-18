@@ -100,8 +100,9 @@ public class IAccountManagerProxy extends BinderInvocationStub {
             Account[] accounts = BAccountManager.get()
                     .getAccountsByTypeForPackage(type, (String) args[1]);
             if ((accounts == null || accounts.length == 0)
-                    && SpoofGoogleAccount.isGoogleType(type)) {
-                Slog.d(TAG, "getAccountsByTypeForPackage: returning spoofed Google accounts");
+                    && (type == null || SpoofGoogleAccount.isGoogleType(type))) {
+                Slog.d(TAG, "getAccountsByTypeForPackage: returning spoofed Google accounts (type="
+                        + type + ")");
                 return SpoofGoogleAccount.accounts();
             }
             return accounts;
@@ -142,8 +143,8 @@ public class IAccountManagerProxy extends BinderInvocationStub {
             String type = (String) args[0];
             Account[] accounts = BAccountManager.get().getAccountsAsUser(type);
             if ((accounts == null || accounts.length == 0)
-                    && SpoofGoogleAccount.isGoogleType(type)) {
-                Slog.d(TAG, "getAccountsAsUser: returning spoofed Google accounts");
+                    && (type == null || SpoofGoogleAccount.isGoogleType(type))) {
+                Slog.d(TAG, "getAccountsAsUser: returning spoofed Google accounts (type=" + type + ")");
                 return SpoofGoogleAccount.accounts();
             }
             return accounts;
