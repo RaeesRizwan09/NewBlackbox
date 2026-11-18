@@ -68,7 +68,14 @@ public class ContentProviderStub extends ClassInvocationStub implements BContent
         if (uid <= 0) {
             uid = BlackBoxCore.getHostUid();
         }
-        String pkg = mKeepVirtualUid ? mAppPkg : BlackBoxCore.getHostPkg();
+        String pkg;
+        if (mKeepVirtualUid) {
+            // Attribution names the caller, which is this sandbox process.
+            pkg = BActivityThread.getAppPackageName();
+            if (pkg == null) pkg = mAppPkg;
+        } else {
+            pkg = BlackBoxCore.getHostPkg();
+        }
         AttributionSourceUtils.fixAttributionSourceInArgs(args, uid, pkg);
     }
 

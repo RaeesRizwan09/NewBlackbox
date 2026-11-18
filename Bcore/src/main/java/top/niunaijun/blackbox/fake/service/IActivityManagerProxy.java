@@ -153,36 +153,29 @@ public class IActivityManagerProxy extends ClassInvocationStub {
                         || authStr.equals("com.huawei.android.launcher.settings")
                         || authStr.equals("com.hihonor.android.launcher.settings");
 
-                // Google providers are mirrored from the host by default, but
-                // when GMS (real or microG) is installed inside the sandbox
-                // they must resolve there: sandboxed microG reads its own
-                // settings/registration state through
-                // com.google.android.gms.microg.settings, and answering from
-                // the host leaves it permanently disabled (no check-in, no
-                // GCM registration).
-                boolean googleProvider = authStr.contains("com.google.android.gms")
-                        || authStr.contains("com.android.vending")
-                        || authStr.contains("com.google.android.gsf");
+                // A provider declared by a package installed in the sandbox is
+                // served from the sandbox; everything else is mirrored from
+                // the host. Resolving the authority (instead of pattern
+                // matching Google names) keeps sandboxed microG talking to its
+                // own settings provider while still honoring user-declared
+                // providers.
+                ProviderInfo sandboxProvider = null;
+                if (!systemProvider) {
+                    try {
+                        sandboxProvider = BlackBoxCore.getBPackageManager()
+                                .resolveContentProvider(authStr, GET_META_DATA,
+                                        BActivityThread.getUserId());
+                    } catch (Throwable ignored) {
+                    }
+                }
 
-                boolean useHostProvider = systemProvider
-                        || (googleProvider && !BlackBoxCore.get().isInstallGms(BActivityThread.getUserId()));
-
-                if (useHostProvider) {
+                if (systemProvider || sandboxProvider == null) {
                     content = method.invoke(who, args);
                     ContentProviderDelegate.update(content, authStr);
                     return content;
                 }
                 {
-                    
-
-                    ProviderInfo providerInfo = BlackBoxCore.getBPackageManager()
-                            .resolveContentProvider(
-                                    (String) auth, GET_META_DATA, BActivityThread.getUserId());
-                    if (providerInfo == null) {
-                        
-                        return null;
-                    }
-
+                    ProviderInfo providerInfo = sandboxProvider;
                     
                     IBinder providerBinder = null;
                     if (BActivityThread.getAppPid() != -1) {

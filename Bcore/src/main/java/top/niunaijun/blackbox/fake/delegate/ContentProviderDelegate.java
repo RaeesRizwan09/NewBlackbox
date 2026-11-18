@@ -4,6 +4,8 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.IInterface;
 import android.util.ArrayMap;
+import android.content.pm.PackageManager;
+import android.content.pm.ProviderInfo;
 
 import java.lang.reflect.Proxy;
 import java.util.HashSet;
@@ -20,6 +22,7 @@ import black.android.providers.BRSettingsNameValueCacheOreo;
 import black.android.providers.BRSettingsSecure;
 import black.android.providers.BRSettingsSystem;
 import top.niunaijun.blackbox.BlackBoxCore;
+import top.niunaijun.blackbox.app.BActivityThread;
 import top.niunaijun.blackbox.fake.service.context.providers.ContentProviderStub;
 import top.niunaijun.blackbox.fake.service.context.providers.SystemProviderStub;
 import top.niunaijun.blackbox.utils.compat.BuildCompat;
@@ -73,7 +76,24 @@ public class ContentProviderDelegate {
             if (!sInjected.contains(providerName)) {
                 sInjected.add(providerName);
                 final IInterface iInterface = BRActivityThreadProviderClientRecordP.get(value).mProvider();
-                BRActivityThreadProviderClientRecordP.get(value)._set_mProvider(new ContentProviderStub().wrapper(iInterface, BlackBoxCore.getHostPkg()));
+                // Providers that the sandbox package manager resolves are
+                // served from inside the sandbox, where Binder.getCallingUid()
+                // is virtualized: the attribution source must keep that same
+                // virtual uid. Host providers keep the host uid.
+                String pkg = BlackBoxCore.getHostPkg();
+                boolean sandboxProvider = false;
+                try {
+                    ProviderInfo info = BlackBoxCore.getBPackageManager()
+                            .resolveContentProvider(providerName, PackageManager.GET_META_DATA,
+                                    BActivityThread.getUserId());
+                    if (info != null) {
+                        sandboxProvider = true;
+                        pkg = info.packageName;
+                    }
+                } catch (Throwable ignored) {
+                }
+                BRActivityThreadProviderClientRecordP.get(value)._set_mProvider(
+                        new ContentProviderStub().wrapper(iInterface, pkg, sandboxProvider));
                 BRActivityThreadProviderClientRecordP.get(value)._set_mNames(new String[]{providerName});
             }
         }
