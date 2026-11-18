@@ -137,7 +137,8 @@ public class IActivityManagerProxy extends ClassInvocationStub {
             Object content = null;
 
             if (auth instanceof String) {
-                if (ProxyManifest.isProxy((String) auth)) {
+                String authStr = (String) auth;
+                if (ProxyManifest.isProxy(authStr)) {
                     return method.invoke(who, args);
                 }
 
@@ -145,19 +146,33 @@ public class IActivityManagerProxy extends ClassInvocationStub {
                     args[1] = BlackBoxCore.getHostPkg();
                 }
 
-                if (auth.equals("settings")
-                        || auth.equals("media")
-                        || auth.equals("telephony")
-                        || ((String) auth).contains("com.google.android.gms")
-                        || ((String) auth).contains("com.android.vending")
-                        || ((String) auth).contains("com.google.android.gsf")
-                        || auth.equals("com.google.android.gms.chimera")
-                        || auth.equals("com.huawei.android.launcher.settings")
-                        || auth.equals("com.hihonor.android.launcher.settings")) {
+                // System providers always come from the host.
+                boolean systemProvider = authStr.equals("settings")
+                        || authStr.equals("media")
+                        || authStr.equals("telephony")
+                        || authStr.equals("com.huawei.android.launcher.settings")
+                        || authStr.equals("com.hihonor.android.launcher.settings");
+
+                // Google providers are mirrored from the host by default, but
+                // when GMS (real or microG) is installed inside the sandbox
+                // they must resolve there: sandboxed microG reads its own
+                // settings/registration state through
+                // com.google.android.gms.microg.settings, and answering from
+                // the host leaves it permanently disabled (no check-in, no
+                // GCM registration).
+                boolean googleProvider = authStr.contains("com.google.android.gms")
+                        || authStr.contains("com.android.vending")
+                        || authStr.contains("com.google.android.gsf");
+
+                boolean useHostProvider = systemProvider
+                        || (googleProvider && !BlackBoxCore.get().isInstallGms(BActivityThread.getUserId()));
+
+                if (useHostProvider) {
                     content = method.invoke(who, args);
-                    ContentProviderDelegate.update(content, (String) auth);
+                    ContentProviderDelegate.update(content, authStr);
                     return content;
-                } else {
+                }
+                {
                     
 
                     ProviderInfo providerInfo = BlackBoxCore.getBPackageManager()
